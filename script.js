@@ -3,10 +3,17 @@ const homeBtn = document.getElementById("homeBtn");
 const ctx = document.getElementById("emgChart").getContext("2d");
 const summaryBox = document.getElementById("ai-summary");
 const scrollSection = document.querySelector(".scroll-section");
+const dataActions = document.querySelector(".data-actions");
+const downloadBtn = document.getElementById("downloadBtn");
+const sendBtn = document.getElementById("sendBtn");
 
 let chart;
+let lastFetchedData = [];
+let lastFetchedTime = [];
 
-// Show "Retrieve" button only after scroll
+// Debug log to verify JS loaded
+console.log("JS LOADED SUCCESSFULLY");
+
 window.addEventListener("scroll", () => {
   if (window.scrollY > window.innerHeight * 0.5) {
     scrollSection.classList.add("visible");
@@ -14,15 +21,29 @@ window.addEventListener("scroll", () => {
   }
 });
 
-// Fetch ThingSpeak Data
 async function fetchEMG() {
+  console.log("fetchEMG CALLED");
+
   const url = "https://api.thingspeak.com/channels/3073213/fields/1.json?api_key=0JGYR24A33IT0QCB&results=20";
+
   try {
     const res = await fetch(url);
     const data = await res.json();
 
-    const values = data.feeds.map(f => parseInt(f.field1));
-    const times = data.feeds.map(f => new Date(f.created_at).toLocaleTimeString());
+    const raw = data.feeds.map(f => f.field1);
+    const filtered = raw.filter(v => v !== "" && v !== null && v !== undefined);
+    const values = filtered.map(v => parseFloat(v));
+
+    console.log("Raw:", raw);
+    console.log("Filtered:", filtered);
+    console.log("Values:", values);
+
+    const times = data.feeds
+      .filter(f => f.field1 !== "" && f.field1 !== null && f.field1 !== undefined)
+      .map(f => {
+        const d = new Date(f.created_at);
+        return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
+      });
 
     if (chart) chart.destroy();
 
@@ -41,9 +62,7 @@ async function fetchEMG() {
       },
       options: {
         responsive: true,
-        plugins: {
-          legend: { labels: { color: "#fff" } }
-        },
+        plugins: { legend: { labels: { color: "#fff" } } },
         scales: {
           x: { ticks: { color: "#fff" } },
           y: { ticks: { color: "#fff" } }
@@ -51,95 +70,124 @@ async function fetchEMG() {
       }
     });
 
-    summarizeData(values);
+    summarizeData(values, times);
 
   } catch (err) {
-    summaryBox.innerHTML = "<p><b>Error:</b> Unable to fetch data.</p>";
+    console.error("FETCH ERROR", err);
+    summaryBox.innerHTML = "<p><strong>Error</strong> Unable to fetch data</p>";
     summaryBox.classList.add("show");
   }
 }
 
-// AI-like Stylish Summary (more informative)
-function summarizeData(values) {
-  if (!values.length) return;
+function summarizeData(values, times) {
+  console.log("summarizeData CALLED");
 
   const avg = values.reduce((a,b) => a+b, 0) / values.length;
   const max = Math.max(...values);
   const min = Math.min(...values);
 
-  let activityLevel =
+  const activityLevel =
     avg > 50 ? "⚡ Strong muscle contractions" :
-    avg > 20 ? "🔹 Moderate engagement" :
-    "🌙 Muscles mostly relaxed";
+    avg > 20 ? "Moderate engagement" :
+    "Muscles mostly relaxed";
 
-  let summary = `
+  summaryBox.innerHTML = `
     <h3>NeuroFlex EMG Analysis</h3>
     <p><strong>Average Value:</strong> ${avg.toFixed(2)} µV</p>
     <p><strong>Peak Activity:</strong> ${max} µV</p>
     <p><strong>Lowest Reading:</strong> ${min} µV</p>
     <p><strong>Activity Level:</strong> ${activityLevel}</p>
-    <p style="margin-top:15px; color:#aaa;">
-      💡 This summary translates raw EMG signals into human-readable insights,
-      showing how active or relaxed your muscles are during the session.
-    </p>
   `;
 
-  summaryBox.innerHTML = summary;
   summaryBox.classList.add("show");
+
+  lastFetchedData = values;
+  lastFetchedTime = times;
+
+  dataActions.classList.add("show");
 }
 
-// Home Button Scroll
+fetchBtn.addEventListener("click", () => {
+  console.log("BUTTON CLICKED");
+  fetchEMG();
+});
+
 homeBtn.addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
+sendBtn.addEventListener("click", () => {
+  document.getElementById("emailModal").style.display = "flex";
+});
 
-// Fetch Data Button
-fetchBtn.addEventListener("click", fetchEMG);
+document.getElementById("cancelModal").addEventListener("click", () => {
+  document.getElementById("emailModal").style.display = "none";
+});
 
-// Particle Effect
-const canvas = document.getElementById("particles");
-const ctx2 = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+document.getElementById("sendModal").addEventListener("click", async () => {
+  const userEmail = document.getElementById("emailInput").value;
 
-let particlesArray = [];
-class Particle {
-  constructor() {
-    this.x = Math.random() * canvas.width;
-    this.y = Math.random() * canvas.height;
-    this.size = Math.random() * 2;
-    this.speedX = (Math.random() - 0.5) * 0.5;
-    this.speedY = (Math.random() - 0.5) * 0.5;
+  if (!userEmail || !userEmail.includes("@")) {
+    alert("Enter a valid email");
+    return;
   }
-  update() {
-    this.x += this.speedX;
-    this.y += this.speedY;
-    if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
-    if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
-  }
-  draw() {
-    ctx2.fillStyle = "rgba(187,134,252,0.8)";
-    ctx2.beginPath();
-    ctx2.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-    ctx2.fill();
-  }
-}
 
-function initParticles() {
-  particlesArray = [];
-  for (let i = 0; i < 100; i++) {
-    particlesArray.push(new Particle());
-  }
-}
+  document.getElementById("emailModal").style.display = "none";
 
-function animateParticles() {
-  ctx2.clearRect(0, 0, canvas.width, canvas.height);
-  particlesArray.forEach(p => {
-    p.update();
-    p.draw();
+  const avg = lastFetchedData.reduce((a, b) => a + b, 0) / lastFetchedData.length;
+  const max = Math.max(...lastFetchedData);
+  const min = Math.min(...lastFetchedData);
+
+  const summary =
+    "NeuroFlex EMG Analysis\n" +
+    "Average Value: " + avg.toFixed(2) + " uV\n" +
+    "Peak Activity: " + max + " uV\n" +
+    "Lowest Reading: " + min + " uV\n" +
+    "Activity Level: " +
+    (avg > 50 ? "Strong contraction" : avg > 20 ? "Moderate engagement" : "Relaxed");
+
+  let csvContent = "Time,Value\n";
+  lastFetchedData.forEach((v, i) => {
+    csvContent += lastFetchedTime[i] + "," + v + "\n";
   });
-  requestAnimationFrame(animateParticles);
-}
 
-initParticles();
-animateParticles();
+  const base64CSV = btoa(csvContent);
+
+  const params = {
+    to_email: userEmail,
+    report_summary: summary,
+    attachment_name: "NeuroFlex_EMG_Data.csv",
+    attachment_data: base64CSV
+  };
+
+  try {
+    await emailjs.send("service_9o8y772", "template_3tmhtmg", params);
+    alert("Report sent successfully");
+  } catch (err) {
+    console.error("Email error", err);
+    alert("Failed to send");
+  }
+});
+
+downloadBtn.addEventListener("click", () => {
+  if (!lastFetchedData.length) {
+    alert("No data to export");
+    return;
+  }
+
+  let csv = "Time,Value\n";
+
+  lastFetchedData.forEach((v, i) => {
+    csv += `${lastFetchedTime[i]},${v}\n`;
+  });
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "NeuroFlex_EMG_Data.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
