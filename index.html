@@ -35,12 +35,35 @@
 
     <div id="ai-summary" class="summary-box"></div>
 
+    <div class="data-actions hidden">
+  <button id="downloadBtn">Download Data (CSV)</button>
+  <button id="sendBtn">Send to Doctor/Guardian</button>
+</div>
+
+<div id="emailModal" class="modal">
+  <div class="modal-content">
+    <h2>Send EMG Report</h2>
+    <input type="email" id="emailInput" placeholder="Enter email address">
+    <div class="modal-actions">
+      <button id="cancelModal">Cancel</button>
+      <button id="sendModal">Send</button>
+    </div>
+  </div>
+</div>
+
+
+
     <button id="homeBtn" class="hidden">Swipe UP</button>
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@2.4.1/dist/email.min.js"></script>
+<script>
+  (function(){
+    emailjs.init("M4L_inNA9IE6XaayL"); // Replace this with your EmailJS Public Key
+  })();
+</script>
+
   <script src="script.js"></script>
 </body>
 </html>
-
-
